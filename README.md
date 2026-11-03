@@ -155,3 +155,10 @@ You must understand every line you submit. We check this with your video and in 
 5. Paste the repository link and the video link in the application form.
 
 We will run `pnpm install && pnpm check && pnpm typecheck && pnpm test` on your repository.
+## Decisions
+
+1. **Store money as integers:** All amounts are stored in integer cents (paise) instead of decimals to avoid rounding errors when splitting bills.
+
+2. **Use idempotency keys for payments:** Each payment request requires an `Idempotency-Key`. This prevents the same request from paying a share twice and makes retries safe.
+
+3. **Use SQL migrations and database constraints:** The database schema is managed through SQL migration files. Foreign keys, unique constraints, and check constraints help protect data integrity and prevent invalid records.
