@@ -25,6 +25,8 @@ CREATE TABLE bills (
     home_id TEXT NOT NULL,
     title TEXT NOT NULL CONSTRAINT bills_title_not_empty
         CHECK (length(trim(title)) > 0),
+    category TEXT NOT NULL DEFAULT 'Other'
+        CHECK (category IN ('Food', 'Utilities', 'Travel', 'Shopping', 'Entertainment', 'Other')),
     total_cents INTEGER NOT NULL
         CONSTRAINT bills_total_positive CHECK (total_cents > 0),
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

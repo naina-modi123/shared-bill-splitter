@@ -234,7 +234,26 @@ button:disabled {
   background: #fafbf8;
   font-size: 12px;
 }
+.member-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #e8eee5;
+  color: #315f43;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
 
+.member-chip button:hover {
+  background: #f5d7d7;
+  color: #b42318;
+}
 .member-dot {
   width: 7px;
   height: 7px;
@@ -460,5 +479,168 @@ button:disabled {
 
   .bill-card {
     padding: 14px;
+  }
+}
+
+/* Phase 1: Dashboard polish */
+
+:root {
+  background: #f5f7f2;
+}
+
+.app-shell {
+  width: min(1240px, calc(100% - 48px));
+  padding-top: 24px;
+}
+
+.topbar {
+  padding-bottom: 20px;
+  border-bottom-color: #e0e7dc;
+}
+
+.brand-mark {
+  box-shadow: 0 5px 12px rgb(49 93 66 / 18%);
+}
+
+.hero {
+  padding: 36px 0 26px;
+}
+
+.hero h1 {
+  letter-spacing: -1.5px;
+}
+
+.panel {
+  border-color: #e4e9e0;
+  border-radius: 18px;
+  box-shadow: 0 4px 18px rgb(31 54 35 / 3%);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.panel:hover {
+  box-shadow: 0 8px 26px rgb(31 54 35 / 6%);
+}
+
+.summary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.summary-card {
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  border-color: #e5eae1;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #fff, #f8faf6);
+}
+
+.summary-value {
+  font-size: clamp(22px, 2.5vw, 29px);
+  overflow-wrap: anywhere;
+}
+
+.button {
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  box-shadow: 0 4px 10px rgb(37 75 52 / 14%);
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.field input {
+  min-height: 44px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.bill-card {
+  border-color: #e6eae2;
+  background: #fff;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.bill-card:hover {
+  border-color: #cbd9c9;
+  box-shadow: 0 4px 14px rgb(31 54 35 / 4%);
+}
+
+.share-row {
+  gap: 10px;
+}
+
+.avatar {
+  border: 1px solid #e0eadc;
+  border-radius: 50%;
+}
+
+.count-pill {
+  white-space: nowrap;
+}
+
+.empty-state {
+  background: #fcfdfb;
+}
+
+.notice {
+  border: 1px solid #f4e4c7;
+}
+
+.notice-success {
+  border-color: #d5e9d1;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgb(100 135 106 / 35%);
+  outline-offset: 2px;
+}
+
+@media (min-width: 1000px) {
+  .workspace {
+    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.5fr);
+    gap: 26px;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    width: calc(100% - 28px);
+  }
+
+  .hero {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .summary-grid {
+    gap: 10px;
+  }
+
+  .summary-card {
+    padding: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
   }
 }

@@ -27,7 +27,122 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 app.get('/api/health', (c) => c.json({ status: 'ok' }))
+app.get('/api/homes', async (c) => {
+  const result = await c.env.DB.prepare(
+    'SELECT id, name FROM homes ORDER BY rowid ASC',
+  ).all<HomeRow>()
 
+  return c.json(result.results)
+})
+app.get('/api/homes/:homeId/members', async (c) => {
+  const homeId = c.req.param('homeId')
+
+  const home = await c.env.DB.prepare('SELECT id FROM homes WHERE id = ?')
+    .bind(homeId)
+    .first<{ id: string }>()
+
+  if (!home) {
+    return c.json({ error: 'Home not found' }, 404)
+  }
+
+  const result = await c.env.DB.prepare(
+    'SELECT id, home_id, name FROM members WHERE home_id = ? ORDER BY created_at ASC, rowid ASC',
+  )
+    .bind(homeId)
+    .all<MemberRow>()
+
+  return c.json({
+    members: result.results.map((member) => ({
+      id: member.id,
+      homeId: member.home_id,
+      name: member.name,
+    })),
+  })
+})
+app.get('/api/homes/:homeId/bills', async (c) => {
+  const homeId = c.req.param('homeId')
+
+  const home = await c.env.DB.prepare('SELECT id FROM homes WHERE id = ?')
+    .bind(homeId)
+    .first<{ id: string }>()
+
+  if (!home) {
+    return c.json({ error: 'Home not found' }, 404)
+  }
+
+  const result = await c.env.DB.prepare(
+    `SELECT
+       b.id AS bill_id,
+       b.home_id,
+       b.title,
+       b.total_cents,
+       b.category,
+       s.id AS share_id,
+       s.member_id,
+       s.amount_cents,
+       s.paid_at
+     FROM bills b
+     LEFT JOIN shares s ON s.bill_id = b.id
+     WHERE b.home_id = ?
+     ORDER BY b.created_at ASC, b.rowid ASC, s.rowid ASC`,
+  )
+    .bind(homeId)
+    .all<{
+      bill_id: string
+      home_id: string
+      title: string
+      total_cents: number
+      category: string
+      share_id: string | null
+      member_id: string | null
+      amount_cents: number | null
+      paid_at: string | null
+    }>()
+
+  const bills = new Map<
+    string,
+    {
+      id: string
+      homeId: string
+      title: string
+      totalCents: number
+      category: string
+      shares: {
+        id: string
+        memberId: string
+        amountCents: number
+        paidAt: string | null
+      }[]
+    }
+  >()
+
+  for (const row of result.results) {
+    let bill = bills.get(row.bill_id)
+
+    if (!bill) {
+      bill = {
+        id: row.bill_id,
+        homeId: row.home_id,
+        title: row.title,
+        totalCents: row.total_cents,
+        category: row.category,
+        shares: [],
+      }
+      bills.set(row.bill_id, bill)
+    }
+
+    if (row.share_id !== null && row.member_id !== null && row.amount_cents !== null) {
+      bill.shares.push({
+        id: row.share_id,
+        memberId: row.member_id,
+        amountCents: row.amount_cents,
+        paidAt: row.paid_at,
+      })
+    }
+  }
+
+  return c.json({ bills: Array.from(bills.values()) })
+})
 app.onError((err, c) => {
   console.error(err)
   return c.json({ error: 'Internal server error' }, 500)
@@ -77,7 +192,38 @@ app.post('/api/homes/:homeId/members', async (c) => {
 
   return c.json({ id: member.id, homeId: member.home_id, name: member.name }, 201)
 })
+app.delete('/api/homes/:homeId/members/:memberId', async (c) => {
+  const homeId = c.req.param('homeId')
+  const memberId = c.req.param('memberId')
 
+  const member = await c.env.DB.prepare('SELECT id FROM members WHERE id = ? AND home_id = ?')
+    .bind(memberId, homeId)
+    .first<{ id: string }>()
+
+  if (!member) {
+    return c.json({ error: 'Member not found' }, 404)
+  }
+
+  const existingShares = await c.env.DB.prepare(
+  `SELECT shares.id
+   FROM shares
+   JOIN bills ON bills.id = shares.bill_id
+   WHERE shares.member_id = ?
+     AND bills.home_id = ?
+   LIMIT 1`,
+)
+  .bind(memberId, homeId)
+  .first<{ id: string }>()
+
+  if (existingShares) {
+    return c.json({ error: 'Cannot remove a member who has existing bill shares' }, 409)
+  }
+  await c.env.DB.prepare('DELETE FROM members WHERE id = ? AND home_id = ?')
+    .bind(memberId, homeId)
+    .run()
+
+  return c.json({ success: true })
+})
 app.post('/api/homes/:homeId/bills', async (c) => {
   const homeId = c.req.param('homeId')
   const body: unknown = await c.req.json().catch(() => null)
@@ -111,11 +257,20 @@ app.post('/api/homes/:homeId/bills', async (c) => {
   const billId = crypto.randomUUID()
   const title = body.title.trim()
   const totalCents = body.totalCents
+
+  const validCategories = ['Food', 'Utilities', 'Travel', 'Shopping', 'Entertainment', 'Other']
+
+  const category =
+    typeof body.category === 'string' && validCategories.includes(body.category)
+      ? body.category
+      : 'Other'
   const baseShare = Math.floor(totalCents / members.results.length)
   const remainder = totalCents % members.results.length
 
-  await c.env.DB.prepare('INSERT INTO bills (id, home_id, title, total_cents) VALUES (?, ?, ?, ?)')
-    .bind(billId, homeId, title, totalCents)
+  await c.env.DB.prepare(
+    'INSERT INTO bills (id, home_id, title, total_cents, category) VALUES (?, ?, ?, ?, ?)',
+  )
+    .bind(billId, homeId, title, totalCents, category)
     .run()
 
   const shares: {
@@ -142,7 +297,7 @@ app.post('/api/homes/:homeId/bills', async (c) => {
     shares.push(share)
   }
 
-  return c.json({ id: billId, homeId, title, totalCents, shares }, 201)
+  return c.json({ id: billId, homeId, title, totalCents, category, shares }, 201)
 })
 
 app.post('/api/bills/:billId/shares/:shareId/pay', async (c) => {

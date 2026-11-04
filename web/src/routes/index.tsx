@@ -17,6 +17,7 @@ type Bill = {
   title: string
   totalCents: number
   shares: Share[]
+  category: string
 }
 type Balance = {
   memberId: string
@@ -68,6 +69,7 @@ function HomePage() {
   const [memberName, setMemberName] = useState('')
   const [billTitle, setBillTitle] = useState('')
   const [billAmount, setBillAmount] = useState('')
+  const [billCategory, setBillCategory] = useState('Other')
   const [loading, setLoading] = useState(false)
   const [creatingHome, setCreatingHome] = useState(false)
   const [creatingMember, setCreatingMember] = useState(false)
@@ -190,6 +192,26 @@ function HomePage() {
       setCreatingMember(false)
     }
   }
+  async function removeMember(memberId: string) {
+    if (!home) return
+
+    const confirmed = window.confirm('Are you sure you want to remove this member?')
+    if (!confirmed) return
+
+    try {
+      await request(`/homes/${home.id}/members/${memberId}`, {
+        method: 'DELETE',
+      })
+
+      setMembers((current) => current.filter((member) => member.id !== memberId))
+      setBalances((current) => current.filter((balance) => balance.memberId !== memberId))
+
+      setSuccessMessage('Member removed successfully.')
+      setErrorMessage('')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to remove member.')
+    }
+  }
 
   async function createBill(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -211,12 +233,14 @@ function HomePage() {
         body: JSON.stringify({
           title: billTitle,
           totalCents: Math.round(rupees * 100),
+          category: billCategory,
         }),
       })
 
       setBills((current) => [...current, bill])
       setBillTitle('')
       setBillAmount('')
+      setBillCategory('Other')
       await refreshBalances(home.id)
       setSuccessMessage('Bill created and split successfully.')
     } catch (error) {
@@ -262,11 +286,19 @@ function HomePage() {
   }
 
   const totalOutstanding = balances.reduce((total, balance) => total + balance.outstandingCents, 0)
-  const paidShareCount = bills.reduce(
-    (total, bill) => total + bill.shares.filter((share) => share.paidAt !== null).length,
+
+  const totalExpenses = bills.reduce((total, bill) => total + bill.totalCents, 0)
+
+  const pendingShareCount = bills.reduce(
+    (total, bill) => total + bill.shares.filter((share) => share.paidAt === null).length,
     0,
   )
-  const shareCount = bills.reduce((total, bill) => total + bill.shares.length, 0)
+
+  const currentMonthExpenses = bills.reduce((total, bill) => {
+    // The API currently does not return bill creation dates.
+    // Until it does, use all bill expenses as a fallback.
+    return total + bill.totalCents
+  }, 0)
 
   return (
     <main className="app-shell">
@@ -299,16 +331,27 @@ function HomePage() {
 
       <section className="summary-grid">
         <div className="summary-card">
-          <div className="summary-label">Total outstanding</div>
-          <div className="summary-value">{money(totalOutstanding)}</div>
-          <div className="summary-hint">Unpaid shares across all bills</div>
+          <div className="summary-label">Total expenses</div>
+          <div className="summary-value">{money(totalExpenses)}</div>
+          <div className="summary-hint">Across all recorded bills</div>
         </div>
+
         <div className="summary-card">
-          <div className="summary-label">Shares settled</div>
-          <div className="summary-value">
-            {paidShareCount}/{shareCount}
-          </div>
-          <div className="summary-hint">Payments recorded successfully</div>
+          <div className="summary-label">Outstanding balance</div>
+          <div className="summary-value">{money(totalOutstanding)}</div>
+          <div className="summary-hint">Amount still unpaid</div>
+        </div>
+
+        <div className="summary-card">
+          <div className="summary-label">Pending payments</div>
+          <div className="summary-value">{pendingShareCount}</div>
+          <div className="summary-hint">Shares awaiting payment</div>
+        </div>
+
+        <div className="summary-card">
+          <div className="summary-label">Monthly spending</div>
+          <div className="summary-value">{money(currentMonthExpenses)}</div>
+          <div className="summary-hint">All recorded expenses for now</div>
         </div>
       </section>
 
@@ -372,6 +415,13 @@ function HomePage() {
                       <span className="member-chip" key={member.id}>
                         <span className="member-dot" />
                         {member.name}
+                        <button
+                          type="button"
+                          onClick={() => removeMember(member.id)}
+                          aria-label={`Remove ${member.name}`}
+                        >
+                          ×
+                        </button>
                       </span>
                     ))}
                   </div>
@@ -416,6 +466,21 @@ function HomePage() {
                     required
                   />
                 </div>
+                <div className="field">
+                  <label htmlFor="billCategory">Expense category</label>
+                  <select
+                    id="billCategory"
+                    value={billCategory}
+                    onChange={(event) => setBillCategory(event.target.value)}
+                  >
+                    <option value="Food">Food</option>
+                    <option value="Utilities">Utilities</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
                 <button
                   type="submit"
                   className="button"
@@ -455,7 +520,9 @@ function HomePage() {
               <div className="bill-top">
                 <div>
                   <div className="bill-title">{bill.title}</div>
-                  <div className="bill-subtitle">{bill.shares.length} shares</div>
+                  <div className="bill-subtitle">
+                    {bill.category} · {bill.shares.length} shares
+                  </div>
                 </div>
                 <div className="bill-amount">{money(bill.totalCents)}</div>
               </div>
